@@ -1,0 +1,200 @@
+FROM ubuntu:22.04
+RUN ln -snf /usr/share/zoneinfo/Asia/Seoul /etc/localtime
+RUN apt update --fix-missing 
+RUN apt upgrade -y
+#RUN apt update
+RUN apt install -y openssh-server
+RUN apt install -y openssh-client
+RUN apt install -y pdsh
+RUN apt-get install -y vim
+RUN apt install less
+RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/gi' /etc/ssh/sshd_config
+
+RUN ssh-keygen -t rsa -N '' -f /root/.ssh/id_rsa 
+RUN cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+RUN chmod 0600 ~/.ssh/authorized_keys
+RUN echo "ssh" > /etc/pdsh/rcmd_default
+RUN apt install -y openjdk-8-jdk
+RUN mkdir /root/hadoop
+RUN wget https://archive.apache.org/dist/hadoop/common/hadoop-3.3.4/hadoop-3.3.4.tar.gz -P /root/hadoop
+RUN tar zxvf /root/hadoop/hadoop-3.3.4.tar.gz -C /root/hadoop --strip 1
+RUN echo "export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk-amd64" >> /root/hadoop/etc/hadoop/hadoop-env.sh
+RUN sed -i '20d' /root/hadoop/etc/hadoop/core-site.xml
+RUN printf  "<property>\n\
+             <name>fs.defaultFS</name>\n\
+             <value>hdfs://localhost:9000</value>\n\
+             </property>\n\
+            <property>\n\
+             <name>dfs.replication</name>\n\
+             <value>1</value>\n\
+          </property>\n\
+          </configuration>" >> /root/hadoop/etc/hadoop/core-site.xml
+
+RUN printf  "export HADOOP_HOME=\"/root/hadoop\"\n\
+export PATH=\$PATH:\$HADOOP_HOME/bin\n\
+export PATH=\$PATH:\$HADOOP_HOME/sbin\n\
+export HADOOP_MAPRED_HOME=\$HADOOP_HOME\n\
+export HADOOP_COMMON_HOME=\$HADOOP_HOME\n\
+export HADOOP_HDFS_HOME=\$HADOOP_HOME\n\
+export YARN_HOME=\$HADOOP_HOME\n\
+export HDFS_NAMENODE_USER=\"root\"\n\
+export HDFS_DATANODE_USER=\"root\"\n\
+export HDFS_SECONDARYNAMENODE_USER=\"root\"\n\
+export YARN_RESOURCEMANAGER_USER=\"root\"\n\
+export YARN_NODEMANAGER_USER=\"root\"" >> /root/.bashrc
+
+RUN /bin/bash -c "source /root/.bashrc"
+
+RUN sed -i '21d' /root/hadoop/etc/hadoop/mapred-site.xml
+
+RUN printf  "<property>\n\
+            <name>mapreduce.framework.name</name>\n\
+              <value>yarn</value>\n\
+        </property>\n\
+        <property>\n\
+            <name>yarn.app.mapreduce.am.env</name>\n\
+            <value>HADOOP_MAPRED_HOME=/root/hadoop</value>\n\
+        </property>\n\
+        <property>\n\
+            <name>mapreduce.map.env</name>\n\
+             <value>HADOOP_MAPRED_HOME=/root/hadoop</value>\n\
+        </property>\n\
+        <property>\n\
+            <name>mapreduce.reduce.env</name>\n\
+            <value>HADOOP_MAPRED_HOME=/root/hadoop</value>\n\
+        </property></configuration>" >> /root/hadoop/etc/hadoop/mapred-site.xml
+
+RUN sed -i '19d' /root/hadoop/etc/hadoop/yarn-site.xml
+RUN printf  "<property>\n\
+                <name>yarn.nodemanager.aux-services</name>\n\
+                <value>mapreduce_shuffle</value>\n\
+            </property>\n\
+            <property>\n\
+                <name>yarn.nodemanager.vmem-check-enabled</name>\n\
+                <value>false</value>\n\
+            </property>\n\
+            </configuration>\n"  >> /root/hadoop/etc/hadoop/yarn-site.xml
+
+RUN apt install less
+
+#============================= 하이브 설치 =====================================
+RUN /bin/bash -c  "apt-get install python3-pip -y"
+
+
+#하이브 다운로드 폴더 생성
+RUN mkdir ~/hive
+#하이브 다운로드
+RUN wget https://dlcdn.apache.org/hive/hive-3.1.3/apache-hive-3.1.3-bin.tar.gz	 -P /root/hive
+
+# tar zxvf : 확장자가 tar.gz 인 파일의 압축 해제
+# --strip 1 : 여기에 압축 해제
+RUN tar zxvf /root/hive/apache-hive-3.1.3-bin.tar.gz -C /root/hive --strip 1
+
+RUN printf "\n\
+            JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64\n\
+            HADOOP_CONF_DIR=\$HADOOP_HOME/etc/hadoop\n\
+            HIVE_HOME=/root/hive\n\
+            export JAVA_HOME HADOOP_CONF_DIR HIVE_HOME\n\
+            export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:\$HADOOP_HOME/lib/native\n\
+            export PATH=\$PATH:\$JAVA_HOME/bin:\$HADOOP_HOME/bin:\$HADOOP_HOME/sbin:\$HIVE_HOME/bin">>/root/.bashrc
+
+RUN /bin/bash -c "source /root/.bashrc"
+
+RUN printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n\
+<?xml-stylesheet type=\"text/xsl\" href=\"configuration.xsl\"?>\n\
+<configuration>\n\
+<property>\n\
+<name>javax.jdo.option.ConnectionURL</name>\n\
+<value>jdbc:mysql://localhost:3306/metastore?createDatabaseIfNotExist=true&amp;serverTimezone=Asia/Seoul</value>\n\
+<description>metadata is stored in a MySQL server</description>\n\
+</property>\n\
+<property>\n\
+<name>javax.jdo.option.ConnectionDriverName</name>\n\
+<value>com.mysql.cj.jdbc.Driver</value>\n\
+<description>MySQL JDBC driver class</description>\n\
+</property>\n\
+<property>\n\
+<name>javax.jdo.option.ConnectionUserName</name>\n\
+<value>hive</value>\n\
+<description>user name for connecting to mysql server</description>\n\
+</property>\n\
+<property>\n\
+<name>javax.jdo.option.ConnectionPassword</name>\n\
+<value>1234</value>\n\
+<description>hivepassword for connecting to mysql server</description>\n\
+</property>\n\
+<property>\n\
+    <name>hive.server2.enable.doAs</name>\n\
+    <value>false</value>\n\
+  </property>\n\
+  <property>\n\
+    <name>hive.server2.authentication</name>\n\
+    <value>NONE</value>\n\
+    </property>\n\
+	</configuration>" > /root/hive/conf/hive-site.xml
+
+RUN wget https://repo1.maven.org/maven2/mysql/mysql-connector-java/8.0.22/mysql-connector-java-8.0.22.jar  -P /root/hive/lib/
+
+RUN rm -rf /root/hive/lib/guava-19.0.jar
+RUN cp /root/hadoop/share/hadoop/common/lib/guava-27.0-jre.jar /root/hive/lib/
+
+#한글 다운로드
+RUN apt-get install locales
+#한글 출력 설정
+RUN localedef -f UTF-8 -i ko_KR ko_KR.UTF-8
+#하이브 한글 출력 설정
+RUN export LC_ALL=ko_KR.UTF-8
+#한글 입력 설정
+RUN LC_ALL=ko_KR.UTF-8 bash
+
+
+#데이터다운로드
+RUN mkdir /data
+RUN wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate 'https://docs.google.com/uc?export=download&id=1lRaNA-T9Lb2OuFYDoejIoUnHGnMxLq_8' -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')&id=1lRaNA-T9Lb2OuFYDoejIoUnHGnMxLq_8" -O /data/data.zip && rm -rf /tmp/cookies.txt
+
+RUN apt-get install unzip
+RUN /bin/bash -c "unzip /data/data.zip -d /data"
+
+RUN apt-get install expect -qy
+
+RUN wget https://dev.mysql.com/get/mysql-apt-config_0.8.12-1_all.deb  -P /root/
+
+
+RUN wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate 'https://docs.google.com/uc?export=download&id=1lMwdz0obX6d-QVwnp7mn64H2Hd9k7GGk' -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')&id=1lMwdz0obX6d-QVwnp7mn64H2Hd9k7GGk" -O /root/mysql_5_7_select.sh && rm -rf /tmp/cookies.txt
+
+RUN  sed -i 's/\r$//' /root/mysql_5_7_select.sh 
+
+
+RUN chmod 777 /root/mysql_5_7_select.sh
+
+RUN  /bin/bash -c "/root/mysql_5_7_select.sh"
+
+RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29 
+
+RUN apt-cache policy mysql-server
+
+
+RUN apt-get update
+
+RUN echo 15
+
+RUN wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate 'https://docs.google.com/uc?export=download&id=1_oEwt4y38JTklDi1bQDIXiDoPUp2gOXk' -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')&id=1_oEwt4y38JTklDi1bQDIXiDoPUp2gOXk" -O /root/mysql_5_7_install.sh && rm -rf /tmp/cookies.txt
+
+
+RUN  sed -i 's/\r$//' /root/mysql_5_7_install.sh 
+RUN chmod 777 /root/mysql_5_7_install.sh
+RUN dpkg --configure -a
+
+RUN  /bin/bash -c "/root/mysql_5_7_install.sh"
+
+RUN sleep 1
+
+#https://drive.google.com/file/d/15LGcZTJjFWnQstZPeXuVAg73pjwMkYEl/view?usp=drive_link
+
+RUN wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate 'https://docs.google.com/uc?export=download&id=15LGcZTJjFWnQstZPeXuVAg73pjwMkYEl' -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')&id=15LGcZTJjFWnQstZPeXuVAg73pjwMkYEl" -O /root/hadoop_hive_start.sh && rm -rf /tmp/cookies.txt
+
+
+RUN  sed -i 's/\r$//' /root/hadoop_hive_start.sh 
+RUN chmod 777 /root/hadoop_hive_start.sh
+
+WORKDIR /root
