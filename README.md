@@ -15,6 +15,10 @@
   <a href="https://www.docker.com/" target="_blank"><img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white"/></a>
 </div>
 
+# Architecture
+![주가예측프로젝트아키텍처](https://github.com/tjkpolisher/hadoop_stock/assets/80250150/8c9771f1-f622-4d35-ad54-ac3f44257d98)
+
+
 # How to Run
 ## Dockerfile
 `hadoop_hive_dockerfile2.txt` 도커파일을 이용해 이미지를 빌드합니다.
